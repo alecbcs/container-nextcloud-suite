@@ -1,0 +1,116 @@
+version: '3'
+
+services:
+  db:
+    image: mariadb
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    restart: always
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=[##REPLACE ME WITH A RANDOMLY GENERATED PASSWORD##]
+    env_file:
+      - db.env
+
+  redis:
+    image: redis:alpine
+    restart: always
+
+  app:
+    image: nextcloud:fpm-alpine
+    restart: always
+    volumes:
+      - /home/[##USER##]/nextcloud:/var/www/html
+    environment:
+      - MYSQL_HOST=db
+      - REDIS_HOST=redis
+    env_file:
+      - db.env
+    depends_on:
+      - db
+      - redis
+
+  web:
+    build: ./web
+    restart: always
+    volumes:
+      - /home/[##USER##]/nextcloud:/var/www/html:ro
+    environment:
+      - VIRTUAL_HOST=[##mynextcloud.example.com##]
+      - LETSENCRYPT_HOST=[##mynextcloud.example.com##]
+      - LETSENCRYPT_EMAIL=[##A REACHABLE EMAIL ADDRESS##]
+    depends_on:
+      - app
+    networks:
+      - proxy-tier
+      - default
+
+  cron:
+    image: nextcloud:fpm-alpine
+    restart: always
+    volumes:
+      - /home/[##USER##]/nextcloud:/var/www/html
+    entrypoint: /cron.sh
+    depends_on:
+      - db
+      - redis
+
+  proxy:
+    build: ./proxy
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    labels:
+      com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
+    volumes:
+      - certs:/etc/nginx/certs:ro
+      - vhost.d:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - proxy-tier
+
+  letsencrypt-companion:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    restart: always
+    volumes:
+      - certs:/etc/nginx/certs
+      - vhost.d:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy-tier
+    depends_on:
+      - proxy
+
+    
+  collabora:
+    image: collabora/code
+    restart: always
+    networks:
+      - proxy-tier
+    depends_on:
+      - proxy
+    cap_add:
+     - MKNOD
+    ports:
+      - 127.0.0.1:9980:9980
+    environment:
+      # IMPORTANT: Note the backslashs before the dots here (and only here)!
+      - domain=[##mynextcloud\.example\.com##]
+      - username=admin
+      - password=[##REPLACE ME WITH A RANDOMLY GENERATED PASSWORD##]
+      - VIRTUAL_HOST=[##collabora.example.com##]
+      - VIRTUAL_NETWORK=proxy-tier
+      - VIRTUAL_PORT=9980
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=true
+      - LETSENCRYPT_HOST=[##collabora.example.com##]
+volumes:
+  db:
+  certs:
+  vhost.d:
+  html:
+
+networks:
+  proxy-tier:
