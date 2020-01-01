@@ -34,7 +34,7 @@ A Fully Containerized Nextcloud System with Collabora, S3 Object Storage Possibl
 
 6. Replace the `[##REPLACE ME WITH A RANDOMLY GENERATED PASSWORD##]` values in `docker-compose.yml` and `db.env`
 
-7. Run the command `docker-compose -d --remove-orphans --build` to build your nextcloud machine for the first time.
+7. Run the command `docker-compose up -d --remove-orphans --build` to build your nextcloud machine for the first time.
 
 8. Wait for a minute and then navagate to your `mynextcloud.example.com` to check that every is up and running. **If you are planning on using object storage do NOT create the admin account yet!**
 
